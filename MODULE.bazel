@@ -62,6 +62,11 @@ maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
     artifacts = [
         "com.google.code.gson:gson:2.10.1",
+        "com.github.javafaker:javafaker:1.0.2",
+    ],
+    repositories = [
+        "https://repo1.maven.org/maven2",
+        "https://maven.google.com",
     ],
 )
 use_repo(maven, "maven")
