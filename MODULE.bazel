@@ -68,5 +68,6 @@ maven.install(
         "https://repo1.maven.org/maven2",
         "https://maven.google.com",
     ],
+    lock_file = "//:maven_install.json",
 )
-use_repo(maven, "maven")
+use_repo(maven, "maven", "unpinned_maven")

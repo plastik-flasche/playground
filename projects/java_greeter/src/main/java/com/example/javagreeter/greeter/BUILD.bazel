@@ -2,4 +2,7 @@ java_library(
     name = "greeter",
     srcs = ["Greeter.java"],
     visibility = ["//visibility:public"],
+    deps = [
+        "@maven//:com_github_javafaker_javafaker",
+    ],
 )
