@@ -1,0 +1,8 @@
+java_binary(
+    name = "main",
+    srcs = ["Main.java"],
+    main_class = "com.example.javagreeter.main.Main",
+    deps = [
+        "//projects/java_greeter/src/main/java/com/example/javagreeter/greeter",
+    ],
+)

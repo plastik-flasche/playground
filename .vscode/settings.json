@@ -1,5 +1,5 @@
 {
 	"python.analysis.extraPaths": [
-		"./bazel-learning-bazel/external/python_deps/pypi__flask" // Idk why I can't just write "./bazel-bin" but it's just not working how it should
+		"./bazel-learning-bazel/external/rules_python~0.27.0~pip~python_deps_311_flask/site-packages"
 	]
 }

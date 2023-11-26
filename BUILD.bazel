@@ -1,4 +1,9 @@
 alias(
-    name = "updateDeps",
+    name = "updatePythonReqs",
     actual = "//third_party/python:requirements.update",
+)
+
+alias(
+    name = "node_modules",
+    actual = "//third_party/node:node_modules",
 )
