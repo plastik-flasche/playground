@@ -1,0 +1,8 @@
+load("@python_versions//3.11:defs.bzl", "compile_pip_requirements")
+
+compile_pip_requirements(
+    name = "requirements",
+    src = "requirements.txt",
+    requirements_txt = "requirements_lock.txt",
+    visibility = ["//visibility:public"],
+)

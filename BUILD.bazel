@@ -1,0 +1,4 @@
+alias(
+    name = "updateDeps",
+    actual = "//third_party/python:requirements.update",
+)
