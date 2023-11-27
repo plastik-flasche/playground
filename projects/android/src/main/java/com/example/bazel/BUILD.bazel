@@ -1,0 +1,13 @@
+package(
+    default_visibility = ["//projects/android:__subpackages__"],
+)
+
+android_library(
+    name = "greeterActivity",
+    srcs = [
+        "Greeter.java",
+        "MainActivity.java",
+    ],
+    manifest = "AndroidManifest.xml",
+    resource_files = glob(["res/**"]),
+)
