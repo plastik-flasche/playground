@@ -7,3 +7,5 @@ alias(
     name = "node_modules",
     actual = "//third_party/node:node_modules",
 )
+
+exports_files([".idea/misc.xml"])
