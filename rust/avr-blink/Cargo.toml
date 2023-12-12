@@ -1,0 +1,25 @@
+[package]
+name = "avr-blink"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+panic-halt = "0.2.0"
+
+[dependencies.atmega-hal]
+git = "https://github.com/Rahix/avr-hal"
+rev = "bfd6d7c"
+features = ["atmega328p", "rt"]
+
+[profile.dev]
+panic = "abort"
+lto = true
+opt-level = "s"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+debug = true
+lto = true
+opt-level = "s"

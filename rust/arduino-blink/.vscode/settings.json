@@ -1,0 +1,7 @@
+{
+	"rust-analyzer.check.allTargets": false,
+	"rust-analyzer.check.extraArgs": [
+		"--target",
+		"avr-unknown-gnu-atmega328p"
+	]
+}

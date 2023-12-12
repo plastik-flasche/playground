@@ -1,0 +1,8 @@
+# Bazel symlinks
+bazel-*
+
+# Bazel plugin for IntelliJ
+.ijwb/
+
+# Bazel plugin for Android Studio
+.aswb/
