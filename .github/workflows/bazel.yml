@@ -11,10 +11,10 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
-        working-directory: learning-bazel # Set the working directory for all run steps
+        working-directory: bazel # Set the working directory for all run steps
 
     steps:
       - uses: actions/checkout@v2
