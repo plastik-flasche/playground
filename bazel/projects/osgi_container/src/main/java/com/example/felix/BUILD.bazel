@@ -1,0 +1,8 @@
+java_binary(
+    name = "felix",
+    srcs = glob(["*.java"]),
+    main_class = "com.example.felix.App",
+    deps = [
+        "@maven//:org_apache_felix_org_apache_felix_framework",
+    ],
+)

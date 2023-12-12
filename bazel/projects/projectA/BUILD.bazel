@@ -1,0 +1,7 @@
+genrule(
+    name = "foo",
+    srcs = ["//projects/projectB:bar.txt"],
+    outs = ["foo.txt"],
+    cmd = "sleep 5 && echo -n 'Goodbye' > $@ && cat $< >> $@",
+    visibility = ["//visibility:public"],
+)

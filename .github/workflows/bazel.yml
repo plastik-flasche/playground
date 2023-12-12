@@ -14,12 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: bazelbuild/setup-bazelisk@v1
+
       - name: Mount bazel cache
         uses: actions/cache@v2
         with:
           path: ~/.cache/bazel
           key: bazel
+
+      # Change to the specific directory
+      - name: Change to learning-bazel directory
+        run: cd learning-bazel
+
       - name: Build
         run: bazel build //...
+
       - name: Test
         run: bazel test //...
