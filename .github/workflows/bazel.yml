@@ -22,8 +22,8 @@ jobs:
           key: bazel
 
       # Change to the specific directory
-      - name: Change to learning-bazel directory
-        run: cd learning-bazel
+      - name: Change to bazel directory
+        run: cd bazel
 
       - name: Build
         run: bazel build //...
