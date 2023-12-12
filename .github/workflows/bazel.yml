@@ -11,6 +11,11 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: learning-bazel # Set the working directory for all run steps
+
     steps:
       - uses: actions/checkout@v2
       - uses: bazelbuild/setup-bazelisk@v1
@@ -20,10 +25,6 @@ jobs:
         with:
           path: ~/.cache/bazel
           key: bazel
-
-      # Change to the specific directory
-      - name: Change to bazel directory
-        run: cd bazel
 
       - name: Build
         run: bazel build //...
