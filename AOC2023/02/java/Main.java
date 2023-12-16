@@ -15,7 +15,7 @@ class Main {
 		// Game 1: 4 red, 5 blue, 9 green; 7 green, 7 blue, 3 red; 16 red, 7 blue, 3
 		// green; 11 green, 11 blue, 6 red; 12 red, 14 blue
 
-		String pathToData = Paths.get(".", "AOC2023", "02-java", "DATA.txt").toAbsolutePath().normalize().toString();
+		String pathToData = Paths.get("AOC2023", "02", "DATA.txt").toAbsolutePath().normalize().toString();
 
 		List<String> lines = new ArrayList<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(pathToData))) {
@@ -34,11 +34,11 @@ class Main {
 				"green", 13,
 				"blue", 14);
 
-		int cumulativeScore = games.stream().filter(game -> game.isPossible(available)).mapToInt(game -> game.id).sum();
-		System.out.println("possible games sum: " + cumulativeScore);
+		int task1Sum = games.stream().filter(game -> game.isPossible(available)).mapToInt(game -> game.id).sum();
+		System.out.println("Task 1: " + task1Sum);
 
-		int minimumPowerSum = games.stream().mapToInt(game -> game.getPower()).sum();
-		System.out.println("minimum possible game powers sum: " + minimumPowerSum);
+		int task2Sum = games.stream().mapToInt(game -> game.getPower()).sum();
+		System.out.println("Task 2: " + task2Sum);
 	}
 
 	static class Game {
