@@ -66,19 +66,19 @@ class Main {
 		public int getPower() {
 			return maxColorAppearing.values().stream().reduce(1, (a, b) -> (a * b));
 		}
-	}
 
-	static class SubGame {
-		Map<String, Integer> colorAppearing;
+		static class SubGame {
+			Map<String, Integer> colorAppearing;
 
-		public SubGame(String gameString) {
-			colorAppearing = new HashMap<String, Integer>();
-			String[] colors = gameString.split(", ");
-			for (String color : colors) {
-				String[] colorAndCount = color.split(" ");
-				String name = colorAndCount[1];
-				int count = Integer.parseInt(colorAndCount[0]);
-				colorAppearing.put(name, count);
+			public SubGame(String gameString) {
+				colorAppearing = new HashMap<String, Integer>();
+				String[] colors = gameString.split(", ");
+				for (String color : colors) {
+					String[] colorAndCount = color.split(" ");
+					String name = colorAndCount[1];
+					int count = Integer.parseInt(colorAndCount[0]);
+					colorAppearing.put(name, count);
+				}
 			}
 		}
 	}
