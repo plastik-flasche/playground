@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 import java.util.HashMap;
 
-class Main {
+class Day2 {
 	public static void main(String args[]) {
 		// Example:
 		// Game 1: 4 red, 5 blue, 9 green; 7 green, 7 blue, 3 red; 16 red, 7 blue, 3
