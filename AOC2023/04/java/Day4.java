@@ -84,17 +84,22 @@ public class Day4 {
 		List<Integer> winningNumbers;
 		List<Integer> yourNumbers;
 
+		private static final String REMOVE_CARD_PREFIX = "Card\\s+";
+		private static final String SPLIT_INDEX_AND_NUMBERS = ":\\s+";
+		private static final String SPLIT_SETS = " \\|\\s+";
+		private static final String SPLIT_NUMBERS = "\\s+";
+
 		public Card(String line) {
 			winningNumbers = new ArrayList<>();
 			yourNumbers = new ArrayList<>();
 
-			String[] parts = line.split("Card\\s+")[1].split(":\\s+");
+			String[] parts = line.split(REMOVE_CARD_PREFIX)[1].split(SPLIT_INDEX_AND_NUMBERS);
 			this.index = Integer.parseInt(parts[0]);
 
-			String[] numbers = parts[1].split(" \\|\\s+"); // split into the two halves
+			String[] numbers = parts[1].split(SPLIT_SETS);
 
-			String[] winningStrings = numbers[0].split("\\s+");
-			String[] yourStrings = numbers[1].split("\\s+");
+			String[] winningStrings = numbers[0].split(SPLIT_NUMBERS);
+			String[] yourStrings = numbers[1].split(SPLIT_NUMBERS);
 
 			for (String winningString : winningStrings) {
 				winningNumbers.add(Integer.parseInt(winningString));
