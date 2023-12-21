@@ -3,15 +3,14 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collector;
 
 public class Day5 {
 	public static void main(String[] args) {
@@ -30,16 +29,24 @@ public class Day5 {
 		String target = "location";
 
 		Plan plan = new Plan(lines);
+
 		List<Converter> converters = plan.getConverters();
 		List<Resource> resources = plan.getResources();
-		List<Resource> convertedResources = resources.stream().map(res -> {
-			while (!res.getType().equals(target)) {
-				converters.stream().filter(conv -> conv.getSource().equals(res.getType())).findFirst().get()
-						.convert(res);
-			}
-			return res;
-		}).toList();
-		long min = convertedResources.stream().mapToLong(res -> res.getNumber()).min().getAsLong();
+		List<Resource> convertedResources = resources.stream()
+				.map(res -> {
+					while (!res.getType().equals(target)) {
+						converters.stream()
+								.filter(converter -> converter.getSource().equals(res.getType()))
+								.findFirst()
+								.ifPresent(converter -> converter.convert(res));
+					}
+					return res;
+				})
+				.toList();
+		long min = convertedResources.stream()
+				.mapToLong(Resource::getNumber)
+				.min()
+				.orElseThrow();
 		System.out.println("Task 1: " + min);
 
 	}
@@ -68,9 +75,9 @@ public class Day5 {
 				String startingRes = matcher.group("identifier");
 				String[] numberStrings = matcher.group("everythingElse").split(" ");
 
-				for (String numberString : numberStrings) {
-					resources.add(new Resource(startingRes, Long.parseLong(numberString)));
-				}
+				Arrays.stream(numberStrings)
+						.map(numberString -> new Resource(startingRes, Long.parseLong(numberString)))
+						.forEach(resources::add);
 			}
 
 			return resources;
@@ -98,11 +105,11 @@ public class Day5 {
 
 	static class Resource {
 		String type;
-		long number;
+		Range range;
 
 		public Resource(String type, long number) {
 			this.type = type;
-			this.number = number;
+			setNumber(number);
 		}
 
 		public String getType() {
@@ -110,7 +117,15 @@ public class Day5 {
 		}
 
 		public long getNumber() {
-			return number;
+			return range.getStart();
+		}
+
+		public void setType(String type) {
+			this.type = type;
+		}
+
+		public void setNumber(long number) {
+			this.range = new Range(number, number);
 		}
 	}
 
@@ -118,7 +133,7 @@ public class Day5 {
 		String source;
 		String destination;
 
-		TreeMap<Long, Range> ranges;
+		TreeMap<Long, ConverterRange> ranges;
 
 		private static final Pattern FROM_TO_PATTERN = Pattern
 				.compile("(?<source>\\w+)-to-(?<destination>\\w+) map:\n(?<numbers>.*)", Pattern.DOTALL);
@@ -137,16 +152,16 @@ public class Day5 {
 
 			String[] numberStrings = matcher.group("numbers").split("\n");
 
-			List<Range> ranges = new ArrayList<>();
+			List<ConverterRange> ranges = new ArrayList<>();
 
 			for (String numberString : numberStrings) {
-				ranges.add(new Range(numberString));
+				ranges.add(ConverterRange.fromString(numberString));
 			}
 
 			initMap(ranges);
 		}
 
-		public Converter(String source, String destination, List<Range> ranges) {
+		public Converter(String source, String destination, List<ConverterRange> ranges) {
 			this.source = source;
 			this.destination = destination;
 			this.ranges = new TreeMap<>();
@@ -154,10 +169,10 @@ public class Day5 {
 			initMap(ranges);
 		}
 
-		private void initMap(List<Range> ranges) {
+		private void initMap(List<ConverterRange> ranges) {
 			this.ranges = new TreeMap<>();
 
-			for (Range range : ranges) {
+			for (ConverterRange range : ranges) {
 				this.ranges.put(range.getSourceStart(), range);
 			}
 		}
@@ -171,8 +186,8 @@ public class Day5 {
 		}
 
 		public void convert(Resource resource) {
-			resource.type = this.destination;
-			resource.number = convert(resource.number);
+			resource.setType(this.destination);
+			resource.setNumber(convert(resource.getNumber()));
 		}
 
 		public String getDestination() {
@@ -183,54 +198,101 @@ public class Day5 {
 			return source;
 		}
 
-		public Collection<Range> getRanges() {
+		public Collection<ConverterRange> getRanges() {
 			return ranges.values();
 		}
 	}
 
 	static class Range {
-		private long sourceStart;
-		private long destinationStart;
-		private long range;
+		private long start;
+		private long end;
 
-		public Range(String line) {
+		public Range(long start, long end) {
+			this.start = start;
+			this.end = end;
+		}
+
+		public boolean isInRange(long value) {
+			return (value >= start && value <= end);
+		}
+
+		public long getStart() {
+			return start;
+		}
+
+		public long getEnd() {
+			return end;
+		}
+
+		public boolean isOverlapping(Range other) {
+			return (other.getStart() <= this.getEnd() && other.getEnd() >= this.getStart());
+		}
+
+		public ConverterRange getOverlap(ConverterRange other) {
+			if (isOverlapping(other)) {
+				long overlapStart = Math.max(this.getStart(), other.getStart());
+				long overlapEnd = Math.min(this.getEnd(), other.getEnd());
+				return new ConverterRange(overlapStart, overlapEnd, other.offset);
+			}
+			return null;
+		}
+	}
+
+	static class ConverterRange extends Range {
+		long offset;
+
+		public ConverterRange(long sourceStart, long sourceEnd, long offset) {
+			super(sourceStart, sourceEnd);
+			this.offset = offset;
+		}
+
+		public static ConverterRange fromString(String line) {
 			String[] numbers = line.split(" ");
-			this.destinationStart = Long.parseLong(numbers[0]);
-			this.sourceStart = Long.parseLong(numbers[1]);
-			this.range = Long.parseLong(numbers[2]);
-		}
-
-		public Range(long start, long stop, long offset) {
-			this.sourceStart = start;
-			this.destinationStart = start + offset;
-			this.range = stop - start + 1;
-		}
-
-		public boolean isInRange(long source) {
-			return (source >= sourceStart && source < sourceStart + range);
+			long destinationStart = Long.parseLong(numbers[0]);
+			long sourceStart = Long.parseLong(numbers[1]);
+			long range = Long.parseLong(numbers[2]);
+			long offset = destinationStart - sourceStart;
+			long sourceEnd = sourceStart + range - 1;
+			return new ConverterRange(sourceStart, sourceEnd, offset);
 		}
 
 		public long map(long source) {
 			if (isInRange(source)) {
-				return source + (destinationStart - sourceStart);
+				return source + offset;
 			}
 			return source;
 		}
 
 		public long getSourceStart() {
-			return sourceStart;
-		}
-
-		public long getDestinationStart() {
-			return destinationStart;
-		}
-
-		public long getDestinationEnd() {
-			return destinationStart + range - 1;
+			return getStart();
 		}
 
 		public long getSourceEnd() {
-			return sourceStart + range - 1;
+			return getEnd();
+		}
+
+		public long getDestinationStart() {
+			return getStart() + offset;
+		}
+
+		public long getDestinationEnd() {
+			return getEnd() + offset;
+		}
+
+		public void addOffset(long offset) {
+			this.offset += offset;
+		}
+
+		public ConverterRange getOverlap(ConverterRange other) {
+			ConverterRange overlap = super.getOverlap(other);
+			if (overlap != null) {
+				overlap.addOffset(this.offset);
+			}
+			return overlap;
+		}
+
+		public Range getDestinationRange() {
+			return new Range(getDestinationStart(), getDestinationEnd());
 		}
 	}
 }
