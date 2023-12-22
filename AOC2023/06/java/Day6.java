@@ -4,67 +4,96 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class Day6 {
+	public static void main(String[] args) {
+		String pathToData = Paths.get("AOC2023", "06", "DATA.txt").toAbsolutePath().normalize().toString();
 
-	private record Roots(Double lower, Double upper) {
-	}
+		List<String> lines = new ArrayList<>();
 
-	public static Roots findRoots(double a, double b, double c) {
-		double discriminant = b * b - 4 * a * c;
-
-		// Check if roots are real numbers
-		if (discriminant < 0) {
-			// No real roots
-			return new Roots(null, null);
+		try {
+			lines = Files.readAllLines(Paths.get(pathToData));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 
-		double sqrtDiscriminant = Math.sqrt(discriminant);
-		double upper = (-b - sqrtDiscriminant) / (2 * a);
-		double lower = (-b + sqrtDiscriminant) / (2 * a);
+		long task1Answer = Paper.parseTask1(lines).getProductOfErrors();
+		System.out.println("Task 1: " + task1Answer);
 
-		return new Roots(lower, upper);
+		long task2Answer = Paper.parseTask2(lines).getProductOfErrors();
+		System.out.println("Task 2: " + task2Answer);
 	}
 
-	public static int findMaxError(int time, int distance) {
-		Roots roots = findRoots(-1, time, -distance);
+	static class Paper {
+		private record Roots(Double lower, Double upper) {
+		}
 
-		int lower = (int) Math.floor(roots.lower() + 1);
-		int upper = (int) Math.ceil(roots.upper() - 1);
+		public static Roots findRoots(double a, double b, double c) {
+			double discriminant = b * b - 4 * a * c;
 
-		return upper - lower + 1;
-	}
+			// Check if roots are real numbers
+			if (discriminant < 0) {
+				// No real roots
+				return new Roots(null, null);
+			}
 
-	private record MaxValues(int time, int distance) {
-	}
+			double sqrtDiscriminant = Math.sqrt(discriminant);
+			double upper = (-b - sqrtDiscriminant) / (2 * a);
+			double lower = (-b + sqrtDiscriminant) / (2 * a);
 
-	public static void main(String[] args) {
-		String pathToData = Paths.get("AOC2023", "05", "DATA.txt").toAbsolutePath().normalize().toString();
+			return new Roots(lower, upper);
+		}
 
-		// List<String> lines = new ArrayList<>();
+		public record MaxValues(long time, long distance) {
+			long findMaxError() {
+				Roots roots = findRoots(-1, time, -distance);
+				long lower = (long) Math.floor(roots.lower() + 1);
+				long upper = (long) Math.ceil(roots.upper() - 1);
+				return upper - lower + 1;
+			}
+		}
 
-		// try {
-		// lines = Files.readAllLines(Paths.get(pathToData));
-		// } catch (IOException e) {
-		// throw new RuntimeException(e);
-		// }
+		private List<MaxValues> maxValues;
 
-		/*
-		 * Time: 62 73 75 65
-		 * Distance: 644 1023 1240 1023
-		 */
+		public Paper(List<MaxValues> maxValues) {
+			this.maxValues = maxValues;
+		}
 
-		MaxValues[] maxValues = new MaxValues[] {
-				new MaxValues(62, 644),
-				new MaxValues(73, 1023),
-				new MaxValues(75, 1240),
-				new MaxValues(65, 1023) };
+		public static Paper parseTask1(List<String> rawLines) {
+			String[][] lines = getNumberPairs(rawLines);
 
-		int[] errors = Arrays.stream(maxValues).mapToInt(maxValue -> findMaxError(maxValue.time(), maxValue.distance()))
-				.toArray();
+			List<MaxValues> maxValues = IntStream.range(0, lines[0].length)
+					.mapToObj(i -> new MaxValues(Long.parseLong(lines[0][i]), Long.parseLong(lines[1][i])))
+					.toList();
 
-		Arrays.stream(errors).forEach(System.out::println);
+			return new Paper(maxValues);
+		}
 
-		System.out.println(Arrays.stream(errors).reduce(1, (a, b) -> a * b));
+		public static Paper parseTask2(List<String> rawLines) {
+			String[][] lines = getNumberPairs(rawLines);
+
+			long time = Long.parseLong(String.join("", lines[0]));
+			long distance = Long.parseLong(String.join("", lines[1]));
+
+			return new Paper(List.of(new MaxValues(time, distance)));
+		}
+
+		public static String[][] getNumberPairs(List<String> lines) {
+			return lines.stream()
+					.map(line -> line.split(":\\s+")[1].split("\\s+"))
+					.toArray(String[][]::new);
+		}
+
+		public List<MaxValues> getMaxValues() {
+			return maxValues;
+		}
+
+		public long getProductOfErrors() {
+			return maxValues.stream()
+					.mapToLong(MaxValues::findMaxError)
+					.reduce(1, (a, b) -> a * b);
+		}
 	}
 }
