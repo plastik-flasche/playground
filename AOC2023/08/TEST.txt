@@ -1,0 +1,13 @@
+LLRL
+
+AAA = (AAB, AAB)
+AAB = (AAC, AAC)
+AAC = (AAD, AAD)
+AAD = (ZZZ, ZZZ)
+ZZZ = (AAA, AAA)
+BBA = (BBB, BBB)
+BBB = (BBC, BBC)
+BBC = (BBD, BBD)
+BBD = (BBE, BBE)
+BBE = (BBZ, BBZ)
+BBZ = (BBA, BBA)
