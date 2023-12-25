@@ -3,8 +3,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -14,6 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import java.util.Iterator;
+import java.util.stream.Collectors;
 
 public class Day10 {
 	public static void main(String[] args) {
@@ -27,7 +30,11 @@ public class Day10 {
 			throw new RuntimeException(e);
 		}
 
+		long startTime = System.nanoTime();
+
 		PipeNetwork pipeNetwork = PipeNetwork.parse(lines);
+
+		System.out.println("Time passed (ms): " + (System.nanoTime() - startTime) / 1000000);
 
 		pipeNetwork.deleteNonLoops();
 
@@ -49,6 +56,13 @@ public class Day10 {
 	}
 
 	static record Position(int row, int col) {
+		public Position subtract(Position other) {
+			return new Position(row - other.row(), col - other.col());
+		}
+
+		public Position add(Position other) {
+			return new Position(row + other.row(), col + other.col());
+		}
 	}
 
 	static class PointInLoop {
@@ -173,7 +187,7 @@ public class Day10 {
 				for (int col = 0; col < line.length(); col++) {
 					char value = line.charAt(col);
 					PipeSegment pipeSegment = PipeSegment.fromChar(value);
-					Node node = new Node(row, col);
+					Node node = new Node(new Position(row, col));
 					if (pipeSegment == PipeSegment.EMPTY) {
 						continue;
 					}
@@ -183,7 +197,7 @@ public class Day10 {
 						}
 						startNode = node;
 					}
-					List<Node> connectingNodes = getConnectingNodes(node, pipeSegment.getPossibleConnections());
+					List<Node> connectingNodes = getConnectingNodes(node, pipeSegment.getDirections());
 					if (connectingNodes.size() == 0) {
 						continue;
 					}
@@ -194,32 +208,11 @@ public class Day10 {
 			return new PipeNetwork(graph, startNode);
 		}
 
-		public static List<Node> getConnectingNodes(Node node, PossibleConnections possibleConnections) {
-			List<Node> connectingNodes = new ArrayList<>();
-
-			if (possibleConnections.top) {
-				int row = node.row() - 1;
-				if (row >= 0) {
-					connectingNodes.add(new Node(row, node.col()));
-				}
-			}
-
-			if (possibleConnections.right) {
-				connectingNodes.add(new Node(node.row(), node.col() + 1));
-			}
-
-			if (possibleConnections.bottom) {
-				connectingNodes.add(new Node(node.row() + 1, node.col()));
-			}
-
-			if (possibleConnections.left) {
-				int col = node.col() - 1;
-				if (col >= 0) {
-					connectingNodes.add(new Node(node.row(), col));
-				}
-			}
-
-			return connectingNodes;
+		public static List<Node> getConnectingNodes(Node node, EnumSet<Direction> directions) {
+			return directions.stream()
+					.map(direction -> new Node(direction.applyOffset(node.position())))
+					.filter(node2 -> node2.row() >= 0 && node2.col() >= 0)
+					.collect(Collectors.toList());
 		}
 
 		public List<List<Character>> getXYChars() {
@@ -234,14 +227,14 @@ public class Day10 {
 					row.add(' ');
 				}
 				row.set(node.col(),
-						PipeSegment.fromPossibleConnections(node.getPossibleConnections(graph)).getCharToPrint());
+						PipeSegment.fromDirections(node.getDirections(graph)).getChar());
 			}
 
 			if (startNode != null) {
 				if (startNode.row() >= xyChars.size() || startNode.col() >= xyChars.get(startNode.row()).size()) {
 					throw new IllegalArgumentException("Start node out of bounds");
 				}
-				xyChars.get(startNode.row()).set(startNode.col(), PipeSegment.START.getCharToPrint());
+				xyChars.get(startNode.row()).set(startNode.col(), PipeSegment.START.getChar());
 			}
 
 			return xyChars;
@@ -271,39 +264,62 @@ public class Day10 {
 		}
 	}
 
-	static record PossibleConnections(boolean top, boolean right, boolean bottom, boolean left) {
+	static enum Direction {
+		LEFT(-1, 0), RIGHT(1, 0), TOP(0, -1), BOTTOM(0, 1);
+
+		private Position offset;
+
+		Direction(int xOffset, int yOffset) {
+			this.offset = new Position(yOffset, xOffset);
+		}
+
+		public static Direction getFromOffset(Position offset) {
+			for (Direction direction : Direction.values()) {
+				if (direction.offset.equals(offset)) {
+					return direction;
+				}
+			}
+			throw new IllegalArgumentException("Invalid offset");
+		}
+
+		public Position applyOffset(Position position) {
+			return position.add(offset);
+		}
 	}
 
 	static enum PipeSegment {
-		EMPTY('.', false, false, false, false, ' '),
-		VERTICAL('|', true, false, true, false, '│'),
-		HORIZONTAL('-', false, true, false, true, '─'),
-		TOP_LEFT('J', true, false, false, true, '┘'),
-		TOP_RIGHT('L', true, true, false, false, '└'),
-		BOTTOM_LEFT('7', false, false, true, true, '┐'),
-		BOTTOM_RIGHT('F', false, true, true, false, '┌'),
-		START('S', true, true, true, true, '█'),
-		TOP_LEFT_RIGHT('@', true, true, false, true, '┴'),
-		TOP_RIGHT_BOTTOM('@', true, true, true, false, '├'),
-		BOTTOM_LEFT_RIGHT('@', false, true, true, true, '┬'),
-		TOP_LEFT_BOTTOM('@', true, false, true, true, '┤'),
-		TOP_LEFT_RIGHT_BOTTOM('S', true, true, true, true, '┼'),
-		TOP('@', true, false, false, false, '╵'),
-		RIGHT('@', false, true, false, false, '╶'),
-		BOTTOM('@', false, false, true, false, '╷'),
-		LEFT('@', false, false, false, true, '╴');
+		EMPTY('.', EnumSet.noneOf(Direction.class), ' '),
+		VERTICAL('|', EnumSet.of(Direction.TOP, Direction.BOTTOM), '│'),
+		HORIZONTAL('-', EnumSet.of(Direction.RIGHT, Direction.LEFT), '─'),
+		TOP_LEFT('J', EnumSet.of(Direction.TOP, Direction.LEFT), '┘'),
+		TOP_RIGHT('L', EnumSet.of(Direction.TOP, Direction.RIGHT), '└'),
+		BOTTOM_LEFT('7', EnumSet.of(Direction.BOTTOM, Direction.LEFT), '┐'),
+		BOTTOM_RIGHT('F', EnumSet.of(Direction.BOTTOM, Direction.RIGHT), '┌'),
+		START('S', EnumSet.of(Direction.TOP, Direction.RIGHT, Direction.BOTTOM, Direction.LEFT), '█'),
+		TOP_LEFT_RIGHT('@', EnumSet.of(Direction.TOP, Direction.LEFT, Direction.RIGHT), '┴'),
+		TOP_RIGHT_BOTTOM('@', EnumSet.of(Direction.TOP, Direction.RIGHT, Direction.BOTTOM), '├'),
+		BOTTOM_LEFT_RIGHT('@', EnumSet.of(Direction.BOTTOM, Direction.LEFT, Direction.RIGHT), '┬'),
+		TOP_LEFT_BOTTOM('@', EnumSet.of(Direction.TOP, Direction.LEFT, Direction.BOTTOM), '┤'),
+		TOP_LEFT_RIGHT_BOTTOM('S', EnumSet.allOf(Direction.class), '┼'),
+		TOP('@', EnumSet.of(Direction.TOP), '╵'),
+		RIGHT('@', EnumSet.of(Direction.RIGHT), '╶'),
+		BOTTOM('@', EnumSet.of(Direction.BOTTOM), '╷'),
+		LEFT('@', EnumSet.of(Direction.LEFT), '╴');
 
 		private char value;
-		private char charToPrint;
-		private PossibleConnections possibleConnections;
+		private char character;
+		private EnumSet<Direction> directions;
 
-		PipeSegment(char value, boolean top, boolean right, boolean bottom, boolean left, char charToPrint) {
+		PipeSegment(char value, EnumSet<Direction> directions, char charToPrint) {
 			this.value = value;
-			this.possibleConnections = new PossibleConnections(top, right, bottom, left);
-			this.charToPrint = charToPrint;
+			this.directions = directions;
+			this.character = charToPrint;
 		}
 
-		public static PipeSegment fromChar(char value) {
+		public static PipeSegment fromChar(char value) { // wanted to use a precomputed map but it turns out, it's
+															// actually slower for the size of the input, any larger and
+															// the compute time of the rest of the algorithm would
+															// completely dwarf the performance gain I would get
 			for (PipeSegment pipeSegment : PipeSegment.values()) {
 				if (pipeSegment.value == value) {
 					return pipeSegment;
@@ -313,22 +329,22 @@ public class Day10 {
 			throw new IllegalArgumentException("Invalid pipe segment: " + value);
 		}
 
-		public static PipeSegment fromPossibleConnections(PossibleConnections possibleConnections) {
+		public static PipeSegment fromDirections(EnumSet<Direction> directions) { // same here
 			for (PipeSegment pipeSegment : PipeSegment.values()) {
-				if (pipeSegment.possibleConnections.equals(possibleConnections)) {
+				if (pipeSegment.directions.equals(directions)) {
 					return pipeSegment;
 				}
 			}
 
-			throw new IllegalArgumentException("Invalid possible connections: " + possibleConnections);
+			throw new IllegalArgumentException("Invalid pipe segment: " + directions);
 		}
 
-		public PossibleConnections getPossibleConnections() {
-			return possibleConnections;
+		public char getChar() {
+			return character;
 		}
 
-		public char getCharToPrint() {
-			return charToPrint;
+		public EnumSet<Direction> getDirections() {
+			return directions;
 		}
 	}
 
@@ -359,7 +375,7 @@ public class Day10 {
 		}
 
 		public void removeVertex(Node vertex) {
-			adjList.values().stream().forEach(e -> e.remove(vertex));
+			adjList.values().forEach(e -> e.remove(vertex));
 			adjList.remove(vertex);
 		}
 
@@ -433,14 +449,20 @@ public class Day10 {
 
 	}
 
-	static record Node(int row, int col) {
-		public PossibleConnections getPossibleConnections(Graph graph) {
+	static record Node(Position position) {
+		public EnumSet<Direction> getDirections(Graph graph) {
 			List<Node> adjVertices = graph.adjList.get(this);
-			boolean top = adjVertices.contains(new Node(row - 1, col));
-			boolean right = adjVertices.contains(new Node(row, col + 1));
-			boolean bottom = adjVertices.contains(new Node(row + 1, col));
-			boolean left = adjVertices.contains(new Node(row, col - 1));
-			return new PossibleConnections(top, right, bottom, left);
+			return adjVertices.stream()
+					.map(node -> Direction.getFromOffset(node.position().subtract(position)))
+					.collect(Collectors.toCollection(() -> EnumSet.noneOf(Direction.class)));
+		}
+
+		public int row() {
+			return position.row();
+		}
+
+		public int col() {
+			return position.col();
 		}
 	}
 }
