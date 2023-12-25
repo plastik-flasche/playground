@@ -33,10 +33,125 @@ public class Day10 {
 
 		System.out.println(pipeNetwork.getXYString());
 
-		List<List<Node>> loops = pipeNetwork.getSimpleLoops();
+		Set<List<Node>> loops = pipeNetwork.getSimpleLoops();
+		List<Node> longestLoop = loops.stream().max((l1, l2) -> Integer.compare(l1.size(), l2.size())).get();
 
-		System.out.println("Task 1: " +
-				(loops.stream().mapToInt(List::size).max().getAsInt() / 2));
+		PointInLoop pointInLoop = new PointInLoop(longestLoop);
+		Map<Position, Integer> points = pointInLoop.getPoints();
+		int inside = (int) points.values().stream().filter(i -> i == 1).count();
+
+		System.out.println(pointInLoop);
+
+		System.out.println("Task 1: " + longestLoop.size() / 2);
+
+		System.out.println("Task 2: " + inside);
+
+	}
+
+	static record Position(int row, int col) {
+	}
+
+	static class PointInLoop {
+		private Map<Position, Integer> points;
+		private List<Node> loop;
+		private Map<Position, Node> positionToNode;
+		int maxRow;
+		int maxCol;
+
+		public PointInLoop(List<Node> loop) {
+			this.loop = loop;
+			this.points = new HashMap<>();
+			this.positionToNode = new HashMap<>();
+			for (int i = 0; i < loop.size(); i++) {
+				Node node = loop.get(i);
+				Position position = new Position(node.row(), node.col());
+				positionToNode.put(position, node);
+				points.put(position, 2);
+			}
+			maxRow = positionToNode.keySet().stream().mapToInt(Position::row).max().orElse(0); // more readable but
+																								// less efficient
+			maxCol = positionToNode.keySet().stream().mapToInt(Position::col).max().orElse(0);
+
+			startRayMarcher();
+		}
+
+		private void startRayMarcher() {
+			for (int i = -maxRow + 1; i < maxCol; i++) {
+				rayMarch(i);
+			}
+		}
+
+		private void rayMarch(int xStart) {
+			// march in a 45 degree angle
+			// start at the point where the ray either intersects the x axis or the y axis,
+			// whichever is closer
+
+			int y = 0;
+			int x = xStart;
+			if (xStart < 0) {
+				y = -xStart;
+				x = 0;
+			}
+			boolean inside = false;
+
+			while (true) {
+				Position position = new Position(y, x);
+				if (positionToNode.containsKey(position)) {
+					inside ^= isInverting(positionToNode.get(position));
+				} else {
+					points.put(position, inside ? 1 : 0);
+				}
+				if (y == maxRow || x == maxCol) {
+					break;
+				}
+				y++;
+				x++;
+			}
+		}
+
+		private boolean isInverting(Node node) {
+			Node prevNode = loop.get((loop.indexOf(node) - 1 + loop.size()) % loop.size());
+			Node nextNode = loop.get((loop.indexOf(node) + 1) % loop.size());
+			int count = 0; // if it's 0 or 2 it's a corner, where the ray doesn't pass through the area, it
+							// just touches it
+			if (prevNode.row() > node.row()) {
+				count++;
+			}
+			if (nextNode.row() > node.row()) {
+				count++;
+			}
+			if (prevNode.col() < node.col()) {
+				count++;
+			}
+			if (nextNode.col() < node.col()) {
+				count++;
+			}
+			if (count == 1 || count == 3) { // I put 3 here just to be safe
+				return true;
+			}
+			return false;
+		}
+
+		public Map<Position, Integer> getPoints() {
+			return points;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder sb = new StringBuilder();
+			for (int row = 0; row <= maxRow; row++) {
+				for (int col = 0; col <= maxCol; col++) {
+					sb.append(switch (points.getOrDefault(new Position(row, col), 0)) {
+						case 0 -> " ";
+						case 1 -> "█";
+						case 2 -> "░";
+						default -> throw new RuntimeException("Invalid point value");
+					});
+				}
+				sb.append('\n');
+			}
+			return sb.toString();
+		}
 	}
 
 	static class PipeNetwork {
@@ -151,7 +266,7 @@ public class Day10 {
 			graph.removeNodesWithEdgeCountBelow(2);
 		}
 
-		public List<List<Node>> getSimpleLoops() {
+		public Set<List<Node>> getSimpleLoops() {
 			return graph.findSimpleLoops();
 		}
 	}
@@ -284,9 +399,9 @@ public class Day10 {
 			}
 		}
 
-		public List<List<Node>> findSimpleLoops() {
+		public Set<List<Node>> findSimpleLoops() {
 			List<Node> nodesLeft = new ArrayList<>(adjList.keySet());
-			List<List<Node>> loops = new ArrayList<>();
+			Set<List<Node>> loops = new HashSet<>();
 			while (nodesLeft.size() > 0) {
 				Node startNode = nodesLeft.get(0);
 				List<Node> loop = findLoop(startNode);
