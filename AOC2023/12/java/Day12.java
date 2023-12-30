@@ -28,7 +28,7 @@ public class Day12 {
 											// returns 6985 instead of 6981
 		System.out.println(lines.stream()
 				.map(Day12::compileLine)
-				.map(line -> line.multiplyEntries(2))
+				.map(line -> line.multiplyEntries(1))
 				.map(Day12::calculateCombinations)
 				.mapToInt(Integer::intValue)
 				.sum());
@@ -151,7 +151,7 @@ public class Day12 {
 					.filter(combination -> combination.numbers.size() == 0)
 					.mapToInt(Combination::multiplier)
 					.findFirst()
-					.orElse(0);
+					.orElse(0) * calculateCombinations(Line.fromGroups(nextGroups, numbers));
 		}
 
 		int sum = 0;
