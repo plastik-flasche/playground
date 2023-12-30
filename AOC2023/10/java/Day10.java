@@ -212,7 +212,7 @@ public class Day10 {
 			return directions.stream()
 					.map(direction -> new Node(direction.applyOffset(node.position())))
 					.filter(node2 -> node2.row() >= 0 && node2.col() >= 0)
-					.collect(Collectors.toList());
+					.toList();
 		}
 
 		public List<List<Character>> getXYChars() {
