@@ -25,7 +25,7 @@ public class Day12 {
 
 		lines.stream()
 				.map(Day12::compileLine)
-				// .map(line -> line.multiplyEntries(5))
+				.map(line -> line.multiplyEntries(3))
 				.map(Day12::calculateCombinations)
 				.forEach(System.out::println);
 	}
@@ -176,14 +176,17 @@ public class Day12 {
 
 		List<List<Integer>> combinationsForLength = CombinationGenerator.generateCombinations(n, numberList);
 
+		StringGenerator stringGenerator = new StringGenerator(characterList);
+
 		// check combinations and wrap them
 		List<Combination> combinations = new ArrayList<>();
 
-		List<String> possibleCombinations = getAllCombinations(characterList);
+		// List<String> possibleCombinations = getAllCombinations(characterList);
 
 		combinationsForLength.forEach(combination -> {
 			Pattern pattern = compilePattern(combination);
-			int multiplier = (int) possibleCombinations
+			int sum = combination.stream().mapToInt(Integer::intValue).sum();
+			int multiplier = (int) stringGenerator.getAllCombinationsWithNumberOfHashes(sum)
 					.stream()
 					.filter(possibleCombination -> pattern.matcher(possibleCombination).matches())
 					.count();
@@ -314,6 +317,99 @@ public class Day12 {
 			combinations.add(List.of()); // add empty element
 
 			return combinations;
+		}
+	}
+
+	public static class StringGenerator {
+		private final List<ValidCharacters> characters;
+		private final int numberOfHashes;
+		private final int numberOfQuestionMarks;
+
+		public StringGenerator(List<ValidCharacters> characters) {
+			this.characters = characters;
+			this.numberOfHashes = (int) characters.stream().filter(c -> c == ValidCharacters.HASH).count();
+			this.numberOfQuestionMarks = (int) characters.stream().filter(c -> c == ValidCharacters.QUESTION_MARK)
+					.count();
+		}
+
+		public String getStringFromBooleans(List<Boolean> questionMarkStates) {
+			if (questionMarkStates.size() != numberOfQuestionMarks) {
+				throw new IllegalArgumentException(
+						"The size of the boolean list must match the number of question marks");
+			}
+
+			int questionMarkIndex = 0;
+			StringBuilder stringBuilder = new StringBuilder();
+
+			for (ValidCharacters character : characters) {
+				if (character == ValidCharacters.HASH) {
+					stringBuilder.append("#");
+				} else if (character == ValidCharacters.QUESTION_MARK) {
+					stringBuilder.append(questionMarkStates.get(questionMarkIndex) ? "#" : ".");
+					questionMarkIndex++;
+				}
+			}
+
+			return stringBuilder.toString();
+		}
+
+		public int getNumberOfHashes() {
+			return numberOfHashes;
+		}
+
+		public int getNumberOfQuestionMarks() {
+			return numberOfQuestionMarks;
+		}
+
+		static class BooleanArrayGenerator {
+			public static List<List<Boolean>> generateBooleanArrays(int length, int numberOfTrues) {
+				List<List<Boolean>> result = new ArrayList<>();
+				generateCombinations(new int[numberOfTrues], 0, 0, length, result);
+				return result;
+			}
+
+			// Helper method to recursively generate combinations
+			private static void generateCombinations(int[] combination, int start, int depth, int n,
+					List<List<Boolean>> result) {
+				if (depth == combination.length) {
+					result.add(createList(n, combination));
+					return;
+				}
+
+				for (int i = start; i < n; i++) {
+					combination[depth] = i;
+					generateCombinations(combination, i + 1, depth + 1, n, result);
+				}
+			}
+
+			// Converts a combination of indices to a list of Booleans
+			private static List<Boolean> createList(int n, int[] indices) {
+				List<Boolean> list = new ArrayList<>(n);
+				for (int i = 0; i < n; i++) {
+					list.add(false);
+				}
+				for (int index : indices) {
+					list.set(index, true);
+				}
+				return list;
+			}
+		}
+
+		public List<String> getAllCombinationsWithNumberOfHashes(int numberOfHashes) {
+			int trues = numberOfHashes - this.numberOfHashes;
+
+			if (trues < 0) {
+				return new ArrayList<>();
+			}
+
+			if (trues > this.numberOfQuestionMarks) {
+				return new ArrayList<>();
+			}
+
+			List<List<Boolean>> booleanArrays = BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
+					trues);
+
+			return booleanArrays.stream().map(this::getStringFromBooleans).toList();
 		}
 	}
 }
