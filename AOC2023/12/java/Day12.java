@@ -1,6 +1,8 @@
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -11,7 +13,7 @@ import java.io.IOException;
 
 public class Day12 {
 	public static void main(String[] args) {
-		String pathToData = Paths.get("AOC2023", "12", "DATA.txt").toAbsolutePath().normalize().toString();
+		String pathToData = Paths.get("AOC2023", "12", "TEST.txt").toAbsolutePath().normalize().toString();
 
 		List<String> lines = new ArrayList<>();
 
@@ -21,44 +23,176 @@ public class Day12 {
 			throw new RuntimeException(e);
 		}
 
-		// I am aware that this is really slow, but it was quick to implement and
-		// sufficient for task 1
-
-		List<Integer> combinationNumbers = lines.stream().map(Day12::getCombinations).toList();
-		System.out.println("Task 1: " + combinationNumbers.stream().mapToInt(Integer::intValue).sum());
-
-		System.out.println("Time spent generating combinations: " + timeSpentGeneratingCombinations / 1000000 + "ms");
-		System.out.println("Time spent matching combinations: " + timeSpentMatchingCombinations / 1000000 + "ms");
-		System.out.println(
-				"Total time: " + (timeSpentGeneratingCombinations + timeSpentMatchingCombinations) / 1000000 + "ms");
-		System.out.println("Ratio: " + (double) timeSpentMatchingCombinations / timeSpentGeneratingCombinations);
+		lines.stream()
+				.map(Day12::compileLine)
+				// .map(line -> line.multiplyEntries(5))
+				.map(Day12::calculateCombinations)
+				.forEach(System.out::println);
 	}
 
-	static long timeSpentGeneratingCombinations = 0;
-	static long timeSpentMatchingCombinations = 0;
+	static class Line {
+		private final List<ValidCharacters> characters;
+		private final List<Integer> numbers;
 
-	public static int getCombinations(String line) {
+		public static Line fromGroups(List<List<ValidCharacters>> groups, List<Integer> numbers) {
+			List<ValidCharacters> characters = new ArrayList<>();
+			for (List<ValidCharacters> group : groups) {
+				characters.addAll(group);
+				characters.add(ValidCharacters.DOT);
+			}
+			if (!groups.isEmpty()) {
+				characters.remove(characters.size() - 1);
+			}
+			return new Line(characters, numbers);
+		}
+
+		public Line(List<ValidCharacters> characters, List<Integer> numbers) {
+			this.characters = characters;
+			this.numbers = numbers;
+		}
+
+		public Line multiplyEntries(int multiplier) {
+			if (multiplier < 1) {
+				throw new IllegalArgumentException("Multiplier must be at least 1");
+			}
+
+			List<ValidCharacters> multipliedChars = new ArrayList<>();
+			for (int i = 0; i < multiplier; i++) {
+				multipliedChars.addAll(this.characters);
+				multipliedChars.add(ValidCharacters.QUESTION_MARK);
+			}
+			multipliedChars.remove(multipliedChars.size() - 1);
+
+			List<Integer> multipliedNumbers = new ArrayList<>();
+			for (int i = 0; i < multiplier; i++) {
+				multipliedNumbers.addAll(this.numbers);
+			}
+
+			return new Line(multipliedChars, multipliedNumbers);
+		}
+
+		public List<ValidCharacters> getCharacters() {
+			return new ArrayList<>(characters);
+		}
+
+		public List<List<ValidCharacters>> groups() {
+			List<List<ValidCharacters>> groups = new ArrayList<>();
+			List<ValidCharacters> currentGroup = new ArrayList<>();
+			for (ValidCharacters character : this.characters) {
+				if (character == ValidCharacters.DOT) {
+					if (!currentGroup.isEmpty()) {
+						groups.add(currentGroup);
+						currentGroup = new ArrayList<>();
+					}
+				} else {
+					currentGroup.add(character);
+				}
+			}
+			if (!currentGroup.isEmpty()) {
+				groups.add(currentGroup);
+			}
+			return groups;
+		}
+
+		public List<Integer> numbers() {
+			return new ArrayList<>(numbers);
+		}
+
+		@Override
+		public String toString() {
+			String charactersString = this.characters.stream()
+					.map(ValidCharacters::toString)
+					.collect(Collectors.joining());
+			String numbersString = this.numbers.stream()
+					.map(Object::toString)
+					.collect(Collectors.joining(","));
+			return charactersString + " " + numbersString;
+		}
+	}
+
+	public static Line compileLine(String line) {
 		String[] parts = line.split(" ");
-		String firstVersion = parts[0];
-		List<ValidCharacters> characterList = firstVersion.chars()
-				.mapToObj(character -> ValidCharacters.fromChar((char) character))
+
+		List<ValidCharacters> characters = parts[0].chars()
+				.mapToObj(c -> ValidCharacters.fromChar((char) c))
 				.toList();
-		String[] numbers = parts[1].split(",");
-		List<Integer> numbersList = Stream.of(numbers).map(Integer::parseInt).toList();
 
-		Pattern pattern = compilePattern(numbersList);
+		String[] numberStrings = parts[1].split(",");
+		List<Integer> numbers = Stream.of(numberStrings).map(Integer::parseInt).toList();
 
-		long startTime = System.nanoTime();
-		List<String> combinations = getAllCombinations(characterList);
-		timeSpentGeneratingCombinations += System.nanoTime() - startTime;
+		return new Line(characters, numbers);
+	}
 
-		startTime = System.nanoTime();
-		int count = (int) combinations.stream()
-				.filter(combination -> pattern.matcher(combination).matches())
-				.count();
-		timeSpentMatchingCombinations += System.nanoTime() - startTime;
+	public static int calculateCombinations(Line line) {
+		List<List<ValidCharacters>> groups = line.groups();
+		List<Integer> numbers = line.numbers();
 
-		return count;
+		if (groups.size() == 0) {
+			if (numbers.size() == 0) {
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+
+		List<ValidCharacters> firstGroup = groups.get(0);
+		List<List<ValidCharacters>> nextGroups = groups.subList(1, groups.size());
+
+		List<Combination> thisPass = findAllPossibleNumberCombinations(firstGroup, numbers);
+
+		if (numbers.size() == 0) {
+			Combination emptyCombination = thisPass.stream()
+					.filter(combination -> combination.numbers.size() == 0)
+					.findFirst()
+					.orElseThrow(() -> new RuntimeException("No empty combination found"));
+			return emptyCombination.multiplier;
+		}
+
+		int sum = 0;
+		for (Combination combination : thisPass) {
+			// remove first combination.numbers.size() elements
+			List<Integer> remainingNumbers = numbers.subList(combination.numbers.size(), numbers.size());
+			sum += combination.multiplier * calculateCombinations(Line.fromGroups(nextGroups, remainingNumbers));
+		}
+
+		return sum;
+	}
+
+	static record Combination(List<Integer> numbers, int multiplier) {
+		public int numberOfHashes() {
+			return numbers.stream().mapToInt(Integer::intValue).sum();
+		}
+	}
+
+	public static List<Combination> findAllPossibleNumberCombinations(List<ValidCharacters> characterList,
+			List<Integer> numberList) {
+		// TODO: implement caching
+
+		if (characterList.stream().filter(validChars -> validChars == ValidCharacters.DOT).count() != 0) {
+			throw new IllegalArgumentException("Input must be separated into smaller parts");
+		}
+
+		int n = characterList.size();
+
+		List<List<Integer>> combinationsForLength = CombinationGenerator.generateCombinations(n, numberList);
+
+		// check combinations and wrap them
+		List<Combination> combinations = new ArrayList<>();
+
+		List<String> possibleCombinations = getAllCombinations(characterList);
+
+		combinationsForLength.forEach(combination -> {
+			Pattern pattern = compilePattern(combination);
+			int multiplier = (int) possibleCombinations
+					.stream()
+					.filter(possibleCombination -> pattern.matcher(possibleCombination).matches())
+					.count();
+			if (multiplier > 0) {
+				combinations.add(new Combination(combination, multiplier));
+			}
+		});
+
+		return combinations;
 	}
 
 	public static Pattern compilePattern(List<Integer> numbers) {
@@ -85,8 +219,6 @@ public class Day12 {
 		long questionMarks = characterList.stream()
 				.filter(validChars -> validChars == ValidCharacters.QUESTION_MARK).count();
 		long possibleCombinations = (long) Math.pow(2, questionMarks);
-
-		System.out.println("Generating " + possibleCombinations + " combinations");
 
 		List<String> combinations = new ArrayList<>();
 
@@ -139,6 +271,49 @@ public class Day12 {
 			}
 
 			throw new IllegalArgumentException("Character " + character + " is not a valid character");
+		}
+
+		@Override
+		public String toString() {
+			return Character.toString(character);
+		}
+	}
+
+	public class CombinationGenerator {
+		public static List<List<Integer>> generateCombinations(int n, List<Integer> mustMatch) {
+			// WARNING: for values above 30 this takes unreasonably long to compute)
+
+			List<List<Integer>> combinations = new ArrayList<>();
+
+			final List<Integer> nextMustMatch;
+			if (mustMatch != null && mustMatch.size() > 1) {
+				nextMustMatch = mustMatch.subList(1, mustMatch.size());
+			} else {
+				nextMustMatch = new ArrayList<>(List.of(0));
+			}
+
+			if (mustMatch.size() == 0) {
+				return List.of(List.of());
+			}
+
+			IntStream.range(1, n + 1)
+					.filter(number -> mustMatch == null || number == mustMatch.get(0))
+					.forEach(number -> {
+						int nextN = n - number - 1;
+						List<List<Integer>> subCombinations = generateCombinations(nextN, nextMustMatch);
+						for (List<Integer> subCombination : subCombinations) {
+							// merge them together, so that [1] and [[],[2],[3,4]] becomes
+							// [[1],[1,2],[1,3,4]]
+							List<Integer> merged = Stream.concat(Stream.of(number),
+									subCombination.stream())
+									.toList();
+							combinations.add(merged);
+						}
+					});
+
+			combinations.add(List.of()); // add empty element
+
+			return combinations;
 		}
 	}
 }
