@@ -10,10 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.io.IOException;
+import java.util.Iterator;
 
 public class Day12 {
 	public static void main(String[] args) {
-		String pathToData = Paths.get("AOC2023", "12", "TEST.txt").toAbsolutePath().normalize().toString();
+		String pathToData = Paths.get("AOC2023", "12", "DATA.txt").toAbsolutePath().normalize().toString();
 
 		List<String> lines = new ArrayList<>();
 
@@ -23,12 +24,14 @@ public class Day12 {
 			throw new RuntimeException(e);
 		}
 
-		long startTime = System.nanoTime();
-		lines.stream()
+		long startTime = System.nanoTime(); // FIXME: I forgot some edge case, apparently, for the test data it now
+											// returns 6985 instead of 6981
+		System.out.println(lines.stream()
 				.map(Day12::compileLine)
-				.map(line -> line.multiplyEntries(7))
+				.map(line -> line.multiplyEntries(2))
 				.map(Day12::calculateCombinations)
-				.forEach(System.out::println);
+				.mapToInt(Integer::intValue)
+				.sum());
 		long endTime = System.nanoTime();
 		System.out.println("Time taken: " + (endTime - startTime) / 1000000 + "ms");
 	}
@@ -144,11 +147,11 @@ public class Day12 {
 		List<Combination> thisPass = findAllPossibleNumberCombinations(firstGroup, numbers);
 
 		if (numbers.size() == 0) {
-			Combination emptyCombination = thisPass.stream()
+			return thisPass.stream()
 					.filter(combination -> combination.numbers.size() == 0)
+					.mapToInt(Combination::multiplier)
 					.findFirst()
-					.orElseThrow(() -> new RuntimeException("No empty combination found"));
-			return emptyCombination.multiplier;
+					.orElse(0);
 		}
 
 		int sum = 0;
@@ -177,21 +180,17 @@ public class Day12 {
 
 		int n = characterList.size();
 
-		List<List<Integer>> combinationsForLength = CombinationGenerator.generateCombinations(n, numberList);
+		List<List<Integer>> possibleCombinations = CombinationGenerator.generateCombinations(n, numberList);
 
 		StringGenerator stringGenerator = new StringGenerator(characterList);
 
-		// check combinations and wrap them
 		List<Combination> combinations = new ArrayList<>();
 
-		// List<String> possibleCombinations = getAllCombinations(characterList);
-
-		combinationsForLength.forEach(combination -> {
-			Pattern pattern = compilePattern(combination);
+		possibleCombinations.forEach(combination -> {
 			int sum = combination.stream().mapToInt(Integer::intValue).sum();
-			int multiplier = (int) stringGenerator.getAllCombinationsWithNumberOfHashes(sum)
+			int multiplier = (int) stringGenerator.getAllCombinationsWithNumberOfHashesAsBooleans(sum)
 					.parallel()
-					.filter(possibleCombination -> pattern.matcher(possibleCombination).matches())
+					.filter(possibleCombination -> matchesList(possibleCombination, combination))
 					.count();
 			if (multiplier > 0) {
 				combinations.add(new Combination(combination, multiplier));
@@ -199,6 +198,35 @@ public class Day12 {
 		});
 
 		return combinations;
+	}
+
+	public static boolean matchesList(boolean[] booleans, List<Integer> numbers) {
+		int current = 0;
+		try {
+			Iterator<Integer> numbersIterator = numbers.iterator();
+			for (boolean bool : booleans) {
+				if (bool) {
+					current++;
+				} else {
+					if (current == 0) {
+						continue;
+					}
+					if (current != numbersIterator.next()) {
+						return false;
+					}
+					current = 0;
+				}
+			}
+			if (current != 0 && current != numbersIterator.next()) {
+				return false;
+			}
+			if (numbersIterator.hasNext()) {
+				return false;
+			}
+		} catch (IndexOutOfBoundsException e) {
+			return false;
+		}
+		return true;
 	}
 
 	public static Pattern compilePattern(List<Integer> numbers) {
@@ -356,6 +384,49 @@ public class Day12 {
 			return stringBuilder.toString();
 		}
 
+		public List<ValidCharacters> getCharactersFromBooleans(List<Boolean> questionMarkStates) {
+			if (questionMarkStates.size() != numberOfQuestionMarks) {
+				throw new IllegalArgumentException(
+						"The size of the boolean list must match the number of question marks");
+			}
+
+			List<ValidCharacters> output = new ArrayList<>(characters.size());
+
+			Iterator<Boolean> questionMarkStateIterator = questionMarkStates.iterator();
+
+			for (ValidCharacters character : characters) {
+				if (character == ValidCharacters.HASH) {
+					output.add(ValidCharacters.HASH);
+				} else if (character == ValidCharacters.QUESTION_MARK) {
+					output.add(questionMarkStateIterator.next() ? ValidCharacters.HASH : ValidCharacters.DOT);
+				}
+			}
+
+			return output;
+		}
+
+		public boolean[] getBooleansFromBooleans(List<Boolean> questionMarkStates) {
+			if (questionMarkStates.size() != numberOfQuestionMarks) {
+				throw new IllegalArgumentException(
+						"The size of the boolean list must match the number of question marks");
+			}
+
+			boolean[] output = new boolean[characters.size()];
+
+			Iterator<Boolean> questionMarkStateIterator = questionMarkStates.iterator();
+
+			for (int i = 0; i < characters.size(); i++) {
+				ValidCharacters character = characters.get(i);
+				if (character == ValidCharacters.HASH) {
+					output[i] = true;
+				} else if (character == ValidCharacters.QUESTION_MARK) {
+					output[i] = questionMarkStateIterator.next();
+				}
+			}
+
+			return output;
+		}
+
 		public int getNumberOfHashes() {
 			return numberOfHashes;
 		}
@@ -412,6 +483,36 @@ public class Day12 {
 
 			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
 					trues).map(this::getStringFromBooleans);
+		}
+
+		public Stream<List<ValidCharacters>> getAllCombinationsWithNumberOfHashesAsCharacters(int numberOfHashes) {
+			int trues = numberOfHashes - this.numberOfHashes;
+
+			if (trues < 0) {
+				return Stream.of();
+			}
+
+			if (trues > this.numberOfQuestionMarks) {
+				return Stream.of();
+			}
+
+			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
+					trues).map(this::getCharactersFromBooleans);
+		}
+
+		public Stream<boolean[]> getAllCombinationsWithNumberOfHashesAsBooleans(int numberOfHashes) {
+			int trues = numberOfHashes - this.numberOfHashes;
+
+			if (trues < 0) {
+				return Stream.of();
+			}
+
+			if (trues > this.numberOfQuestionMarks) {
+				return Stream.of();
+			}
+
+			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
+					trues).map(this::getBooleansFromBooleans);
 		}
 	}
 }
