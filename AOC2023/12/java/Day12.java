@@ -23,11 +23,14 @@ public class Day12 {
 			throw new RuntimeException(e);
 		}
 
+		long startTime = System.nanoTime();
 		lines.stream()
 				.map(Day12::compileLine)
-				.map(line -> line.multiplyEntries(3))
+				.map(line -> line.multiplyEntries(7))
 				.map(Day12::calculateCombinations)
 				.forEach(System.out::println);
+		long endTime = System.nanoTime();
+		System.out.println("Time taken: " + (endTime - startTime) / 1000000 + "ms");
 	}
 
 	static class Line {
@@ -187,7 +190,7 @@ public class Day12 {
 			Pattern pattern = compilePattern(combination);
 			int sum = combination.stream().mapToInt(Integer::intValue).sum();
 			int multiplier = (int) stringGenerator.getAllCombinationsWithNumberOfHashes(sum)
-					.stream()
+					.parallel()
 					.filter(possibleCombination -> pattern.matcher(possibleCombination).matches())
 					.count();
 			if (multiplier > 0) {
@@ -320,7 +323,7 @@ public class Day12 {
 		}
 	}
 
-	public static class StringGenerator {
+	static class StringGenerator {
 		private final List<ValidCharacters> characters;
 		private final int numberOfHashes;
 		private final int numberOfQuestionMarks;
@@ -362,24 +365,25 @@ public class Day12 {
 		}
 
 		static class BooleanArrayGenerator {
-			public static List<List<Boolean>> generateBooleanArrays(int length, int numberOfTrues) {
-				List<List<Boolean>> result = new ArrayList<>();
-				generateCombinations(new int[numberOfTrues], 0, 0, length, result);
-				return result;
+
+			public static Stream<List<Boolean>> generateBooleanArrays(int length, int numberOfTrues) {
+				return generateCombinationsStream(new int[numberOfTrues], 0, 0, length);
 			}
 
-			// Helper method to recursively generate combinations
-			private static void generateCombinations(int[] combination, int start, int depth, int n,
-					List<List<Boolean>> result) {
+			// Helper method to generate combinations as a Stream
+			private static Stream<List<Boolean>> generateCombinationsStream(int[] combination, int start, int depth,
+					int n) {
 				if (depth == combination.length) {
-					result.add(createList(n, combination));
-					return;
+					return Stream.of(createList(n, combination.clone()));
 				}
 
-				for (int i = start; i < n; i++) {
-					combination[depth] = i;
-					generateCombinations(combination, i + 1, depth + 1, n, result);
-				}
+				return IntStream.range(start, n)
+						.mapToObj(i -> {
+							int[] newCombination = combination.clone();
+							newCombination[depth] = i;
+							return generateCombinationsStream(newCombination, i + 1, depth + 1, n);
+						})
+						.flatMap(s -> s);
 			}
 
 			// Converts a combination of indices to a list of Booleans
@@ -395,21 +399,19 @@ public class Day12 {
 			}
 		}
 
-		public List<String> getAllCombinationsWithNumberOfHashes(int numberOfHashes) {
+		public Stream<String> getAllCombinationsWithNumberOfHashes(int numberOfHashes) {
 			int trues = numberOfHashes - this.numberOfHashes;
 
 			if (trues < 0) {
-				return new ArrayList<>();
+				return Stream.of();
 			}
 
 			if (trues > this.numberOfQuestionMarks) {
-				return new ArrayList<>();
+				return Stream.of();
 			}
 
-			List<List<Boolean>> booleanArrays = BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
-					trues);
-
-			return booleanArrays.stream().map(this::getStringFromBooleans).toList();
+			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
+					trues).map(this::getStringFromBooleans);
 		}
 	}
 }
