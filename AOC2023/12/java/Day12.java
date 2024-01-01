@@ -1,16 +1,275 @@
-import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import java.util.List;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.Path;
-import java.io.IOException;
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Set;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+
+enum ValidCharacters {
+	BROKEN('#'),
+	FUNCTIONAL('.'),
+	UNKNOWN('?');
+
+	final char symbol;
+
+	ValidCharacters(char symbol) {
+		this.symbol = symbol;
+	}
+
+	static ValidCharacters from(int symbol) {
+		return Arrays.stream(values()).filter(c -> c.symbol == symbol).findFirst().orElseThrow();
+	}
+
+	@Override
+	public String toString() {
+		return String.valueOf(symbol);
+	}
+}
+
+class Transition<T> {
+	private final T match;
+	private final State<T> nextState;
+
+	public Transition(T match, State<T> nextState) {
+		this.match = match;
+		this.nextState = nextState;
+	}
+
+	public boolean matches(List<T> input) {
+		if (match == null) {
+			return true;
+		}
+		if (input.isEmpty()) {
+			return false;
+		}
+		return input.get(0).equals(match);
+	}
+
+	public boolean isEmptyMatching() {
+		return match == null;
+	}
+
+	public boolean matchesAny(Set<List<T>> inputs) {
+		return inputs.stream().anyMatch(this::matches);
+	}
+
+	public State<T> nextState() {
+		return nextState;
+	}
+
+	@Override
+	public String toString() {
+		return "[" + match + "] -> " + nextState.hashCode();
+	}
+}
+
+class State<T> {
+	private final List<Transition<T>> transitions;
+	private boolean isAccepting;
+
+	private final Map<List<T>, Long> groups;
+
+	public State(List<Transition<T>> transitions, boolean isAccepting) {
+		this.transitions = transitions;
+		this.isAccepting = isAccepting;
+		this.groups = new HashMap<>();
+	}
+
+	public State(boolean isAccepting) {
+		this(new ArrayList<>(), isAccepting);
+	}
+
+	public State() {
+		this(false);
+	}
+
+	public boolean canTransitionAny() {
+		return transitions.stream().anyMatch(t -> t.matchesAny(groups.keySet()));
+	}
+
+	public void addGroup(List<T> group) {
+		addGroup(group, 1L);
+	}
+
+	public void addGroup(List<T> group, long count) {
+		groups.put(group, groups.getOrDefault(group, 0L) + count);
+	}
+
+	public void transitionAll() {
+		for (var entry : groups.entrySet()) {
+			List<T> group = entry.getKey();
+			boolean isEmpty = group.isEmpty();
+			boolean transitioned = false;
+			List<T> groupWithoutFirst = isEmpty ? group : group.subList(1, group.size());
+			for (Transition<T> transition : transitions) {
+				if (transition.matches(group)) {
+					transitioned = true;
+					if (transition.isEmptyMatching()) {
+						transition.nextState().addGroup(group, entry.getValue());
+					} else {
+						transition.nextState().addGroup(groupWithoutFirst, entry.getValue());
+					}
+				}
+			}
+			if (transitioned || !isEmpty) {
+				groups.remove(group);
+			}
+		}
+	}
+
+	public long getFinalGroupsCount() {
+		return groups.keySet().stream().filter(g -> g.isEmpty()).mapToLong(groups::get).sum();
+	}
+
+	public void clearGroups() {
+		groups.clear();
+	}
+
+	public boolean isAccepting() {
+		return isAccepting;
+	}
+
+	public void addTransition(Transition<T> transition) {
+		transitions.add(transition);
+	}
+
+	public void setAccepting(boolean isAccepting) {
+		this.isAccepting = isAccepting;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("State(" + hashCode() + ") {");
+		sb.append("\taccepting: " + isAccepting + ", ");
+		for (Transition<T> transition : transitions) {
+			sb.append("\t" + transition + ", ");
+		}
+		sb.append("}");
+		return sb.toString();
+	}
+}
+
+class StateMachine<T> {
+	private final List<State<T>> states;
+	private final State<T> startState;
+
+	public StateMachine(State<T> starState) {
+		this.states = new ArrayList<>();
+		this.startState = starState;
+		this.states.add(starState);
+	}
+
+	public boolean isFinal() {
+		return states.stream().allMatch(state -> !state.canTransitionAny());
+	}
+
+	public void transitionUntilFinal() {
+		while (!isFinal()) {
+			states.forEach(State::transitionAll);
+		}
+	}
+
+	public long countAccepting() {
+		return states.stream().filter(State::isAccepting).mapToLong(State::getFinalGroupsCount).sum();
+	}
+
+	public void clearGroups() {
+		states.forEach(State::clearGroups);
+	}
+
+	public void addState(State<T> state) {
+		states.add(state);
+	}
+
+	public State<T> getStartState() {
+		return startState;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("StateMachine {\n");
+		sb.append("\tstartState: " + startState.hashCode() + "\n");
+		for (State<T> state : states) {
+			sb.append("\t" + state + "\n");
+		}
+		sb.append("}");
+		return sb.toString();
+	}
+}
+
+class CombinationNumberFinder {
+	StateMachine<ValidCharacters> machine;
+
+	private void addBroken(List<State<ValidCharacters>> states) {
+		states.add(new State<>());
+		states.get(states.size() - 2)
+				.addTransition(new Transition<>(ValidCharacters.BROKEN, states.get(states.size() - 1)));
+		states.get(states.size() - 2)
+				.addTransition(new Transition<>(ValidCharacters.UNKNOWN, states.get(states.size() - 1)));
+	}
+
+	private void addFunctional(List<State<ValidCharacters>> states) {
+		states.add(new State<>());
+		states.get(states.size() - 2)
+				.addTransition(new Transition<>(ValidCharacters.FUNCTIONAL, states.get(states.size() - 1)));
+		states.get(states.size() - 2)
+				.addTransition(new Transition<>(ValidCharacters.UNKNOWN, states.get(states.size() - 1)));
+		states.get(states.size() - 1)
+				.addTransition(new Transition<>(ValidCharacters.FUNCTIONAL, states.get(states.size() - 1)));
+		states.get(states.size() - 1)
+				.addTransition(new Transition<>(ValidCharacters.UNKNOWN, states.get(states.size() - 1)));
+	}
+
+	public CombinationNumberFinder(List<Long> numbers) {
+		State<ValidCharacters> startState = new State<>();
+		startState.addTransition(new Transition<>(ValidCharacters.FUNCTIONAL, startState));
+		startState.addTransition(new Transition<>(ValidCharacters.UNKNOWN, startState));
+		List<State<ValidCharacters>> states = new ArrayList<>();
+		states.add(startState);
+		for (int i = 0; i < numbers.size(); i++) {
+			for (int j = 0; j < numbers.get(i); j++) {
+				addBroken(states);
+			}
+			if (i < numbers.size() - 1) {
+				addFunctional(states);
+			}
+		}
+		// make last state accepting
+		states.get(states.size() - 1).setAccepting(true);
+		// remove first state
+		states.remove(0);
+
+		// add transition from end to end: functional, unknown
+		states.get(states.size() - 1)
+				.addTransition(new Transition<>(ValidCharacters.FUNCTIONAL, states.get(states.size() - 1)));
+		states.get(states.size() - 1)
+				.addTransition(new Transition<>(ValidCharacters.UNKNOWN, states.get(states.size() - 1)));
+
+		machine = new StateMachine<>(startState);
+		states.forEach(machine::addState);
+	}
+
+	public long getMatches(String input) {
+		return getMatches(input.chars().mapToObj(ValidCharacters::from).toList());
+	}
+
+	public long getMatches(Collection<ValidCharacters> input) {
+		machine.getStartState().addGroup(new ArrayList<>(input));
+		machine.transitionUntilFinal();
+		long result = machine.countAccepting();
+		machine.clearGroups();
+		return result;
+	}
+}
 
 public class Day12 {
 	public static void main(String[] args) {
@@ -24,495 +283,51 @@ public class Day12 {
 			throw new RuntimeException(e);
 		}
 
-		long startTime = System.nanoTime(); // FIXME: I forgot some edge case, apparently, for the test data it now
-											// returns 6985 instead of 6981
-		System.out.println(lines.stream()
-				.map(Day12::compileLine)
-				.map(line -> line.multiplyEntries(1))
-				.map(Day12::calculateCombinations)
-				.mapToInt(Integer::intValue)
-				.sum());
-		long endTime = System.nanoTime();
-		System.out.println("Time taken: " + (endTime - startTime) / 1000000 + "ms");
+		List<FunctionRecord> records = lines.stream().map(FunctionRecord::from).toList();
+
+		long task1 = records.stream().mapToLong(Day12::getPossibleCombinationCount).sum();
+		System.out.println("Task 1: " + task1);
+
+		long task2 = records.stream().mapToLong(r -> getPossibleCombinationCount(r.multiplyEntries(5))).sum();
+		System.out.println("Task 2: " + task2);
 	}
 
-	static class Line {
-		private final List<ValidCharacters> characters;
-		private final List<Integer> numbers;
-
-		public static Line fromGroups(List<List<ValidCharacters>> groups, List<Integer> numbers) {
-			List<ValidCharacters> characters = new ArrayList<>();
-			for (List<ValidCharacters> group : groups) {
-				characters.addAll(group);
-				characters.add(ValidCharacters.DOT);
-			}
-			if (!groups.isEmpty()) {
-				characters.remove(characters.size() - 1);
-			}
-			return new Line(characters, numbers);
+	record FunctionRecord(List<ValidCharacters> characters, List<Long> numbers) {
+		public static FunctionRecord from(String line) {
+			String[] parts = line.split(" ");
+			List<ValidCharacters> characters = parts[0].chars().mapToObj(ValidCharacters::from).toList();
+			List<Long> numbers = Arrays.stream(parts[1].split(",")).map(Long::parseLong).toList();
+			return new FunctionRecord(characters, numbers);
 		}
 
-		public Line(List<ValidCharacters> characters, List<Integer> numbers) {
-			this.characters = characters;
-			this.numbers = numbers;
-		}
-
-		public Line multiplyEntries(int multiplier) {
-			if (multiplier < 1) {
-				throw new IllegalArgumentException("Multiplier must be at least 1");
+		public FunctionRecord multiplyEntries(int count) {
+			if (count == 0) {
+				throw new IllegalArgumentException("count must be greater than 0");
 			}
-
-			List<ValidCharacters> multipliedChars = new ArrayList<>();
-			for (int i = 0; i < multiplier; i++) {
-				multipliedChars.addAll(this.characters);
-				multipliedChars.add(ValidCharacters.QUESTION_MARK);
+			if (count == 1) {
+				return this;
 			}
-			multipliedChars.remove(multipliedChars.size() - 1);
-
-			List<Integer> multipliedNumbers = new ArrayList<>();
-			for (int i = 0; i < multiplier; i++) {
-				multipliedNumbers.addAll(this.numbers);
+			List<ValidCharacters> newCharacters = new ArrayList<>();
+			List<Long> newNumbers = new ArrayList<>();
+			for (int i = 0; i < count; i++) {
+				newCharacters.addAll(characters);
+				newCharacters.add(ValidCharacters.UNKNOWN);
+				newNumbers.addAll(numbers);
 			}
-
-			return new Line(multipliedChars, multipliedNumbers);
-		}
-
-		public List<ValidCharacters> getCharacters() {
-			return new ArrayList<>(characters);
-		}
-
-		public List<List<ValidCharacters>> groups() {
-			List<List<ValidCharacters>> groups = new ArrayList<>();
-			List<ValidCharacters> currentGroup = new ArrayList<>();
-			for (ValidCharacters character : this.characters) {
-				if (character == ValidCharacters.DOT) {
-					if (!currentGroup.isEmpty()) {
-						groups.add(currentGroup);
-						currentGroup = new ArrayList<>();
-					}
-				} else {
-					currentGroup.add(character);
-				}
-			}
-			if (!currentGroup.isEmpty()) {
-				groups.add(currentGroup);
-			}
-			return groups;
-		}
-
-		public List<Integer> numbers() {
-			return new ArrayList<>(numbers);
+			newCharacters.remove(newCharacters.size() - 1);
+			return new FunctionRecord(newCharacters, newNumbers);
 		}
 
 		@Override
 		public String toString() {
-			String charactersString = this.characters.stream()
-					.map(ValidCharacters::toString)
-					.collect(Collectors.joining());
-			String numbersString = this.numbers.stream()
-					.map(Object::toString)
-					.collect(Collectors.joining(","));
-			return charactersString + " " + numbersString;
+			return characters.stream().map(ValidCharacters::toString).collect(Collectors.joining())
+					+ " "
+					+ numbers.stream().map(Object::toString).collect(Collectors.joining(","));
 		}
 	}
 
-	public static Line compileLine(String line) {
-		String[] parts = line.split(" ");
-
-		List<ValidCharacters> characters = parts[0].chars()
-				.mapToObj(c -> ValidCharacters.fromChar((char) c))
-				.toList();
-
-		String[] numberStrings = parts[1].split(",");
-		List<Integer> numbers = Stream.of(numberStrings).map(Integer::parseInt).toList();
-
-		return new Line(characters, numbers);
-	}
-
-	public static int calculateCombinations(Line line) {
-		List<List<ValidCharacters>> groups = line.groups();
-		List<Integer> numbers = line.numbers();
-
-		if (groups.size() == 0) {
-			if (numbers.size() == 0) {
-				return 1;
-			} else {
-				return 0;
-			}
-		}
-
-		List<ValidCharacters> firstGroup = groups.get(0);
-		List<List<ValidCharacters>> nextGroups = groups.subList(1, groups.size());
-
-		List<Combination> thisPass = findAllPossibleNumberCombinations(firstGroup, numbers);
-
-		if (numbers.size() == 0) {
-			return thisPass.stream()
-					.filter(combination -> combination.numbers.size() == 0)
-					.mapToInt(Combination::multiplier)
-					.findFirst()
-					.orElse(0) * calculateCombinations(Line.fromGroups(nextGroups, numbers));
-		}
-
-		int sum = 0;
-		for (Combination combination : thisPass) {
-			// remove first combination.numbers.size() elements
-			List<Integer> remainingNumbers = numbers.subList(combination.numbers.size(), numbers.size());
-			sum += combination.multiplier * calculateCombinations(Line.fromGroups(nextGroups, remainingNumbers));
-		}
-
-		return sum;
-	}
-
-	static record Combination(List<Integer> numbers, int multiplier) {
-		public int numberOfHashes() {
-			return numbers.stream().mapToInt(Integer::intValue).sum();
-		}
-	}
-
-	public static List<Combination> findAllPossibleNumberCombinations(List<ValidCharacters> characterList,
-			List<Integer> numberList) {
-		// TODO: implement caching
-
-		if (characterList.stream().filter(validChars -> validChars == ValidCharacters.DOT).count() != 0) {
-			throw new IllegalArgumentException("Input must be separated into smaller parts");
-		}
-
-		int n = characterList.size();
-
-		List<List<Integer>> possibleCombinations = CombinationGenerator.generateCombinations(n, numberList);
-
-		StringGenerator stringGenerator = new StringGenerator(characterList);
-
-		List<Combination> combinations = new ArrayList<>();
-
-		possibleCombinations.forEach(combination -> {
-			int sum = combination.stream().mapToInt(Integer::intValue).sum();
-			int multiplier = (int) stringGenerator.getAllCombinationsWithNumberOfHashesAsBooleans(sum)
-					.parallel()
-					.filter(possibleCombination -> matchesList(possibleCombination, combination))
-					.count();
-			if (multiplier > 0) {
-				combinations.add(new Combination(combination, multiplier));
-			}
-		});
-
-		return combinations;
-	}
-
-	public static boolean matchesList(boolean[] booleans, List<Integer> numbers) {
-		int current = 0;
-		try {
-			Iterator<Integer> numbersIterator = numbers.iterator();
-			for (boolean bool : booleans) {
-				if (bool) {
-					current++;
-				} else {
-					if (current == 0) {
-						continue;
-					}
-					if (current != numbersIterator.next()) {
-						return false;
-					}
-					current = 0;
-				}
-			}
-			if (current != 0 && current != numbersIterator.next()) {
-				return false;
-			}
-			if (numbersIterator.hasNext()) {
-				return false;
-			}
-		} catch (IndexOutOfBoundsException e) {
-			return false;
-		}
-		return true;
-	}
-
-	public static Pattern compilePattern(List<Integer> numbers) {
-		// creates a pattern from a list of numbers
-		// for example, the list [1, 1, 3] will create the pattern
-		// \.*#{1}\.+#{1}\.+#{3}\.*
-
-		String pattern = "\\.*";
-
-		for (int i = 0; i < numbers.size(); i++) {
-			pattern += "#{" + numbers.get(i) + "}";
-
-			if (i + 1 != numbers.size()) { // if not the last number
-				pattern += "\\.+";
-			}
-		}
-
-		pattern += "\\.*";
-
-		return Pattern.compile(pattern);
-	}
-
-	public static List<String> getAllCombinations(List<ValidCharacters> characterList) {
-		long questionMarks = characterList.stream()
-				.filter(validChars -> validChars == ValidCharacters.QUESTION_MARK).count();
-		long possibleCombinations = (long) Math.pow(2, questionMarks);
-
-		List<String> combinations = new ArrayList<>();
-
-		for (long i = 0; i < possibleCombinations; i++) {
-			String combination = "";
-
-			// convert the number to binary, the MSB is at index 0
-			Boolean[] binary = new Boolean[(int) questionMarks];
-			for (int j = 0; j < questionMarks; j++) {
-				binary[j] = (i & (1 << j)) != 0;
-			}
-
-			int binaryIndex = 0;
-			for (ValidCharacters character : characterList) {
-				if (character == ValidCharacters.QUESTION_MARK) {
-					combination += binary[binaryIndex] ? ValidCharacters.HASH.getCharacter()
-							: ValidCharacters.DOT.getCharacter();
-					binaryIndex++;
-				} else {
-					combination += character.getCharacter();
-				}
-			}
-
-			combinations.add(combination);
-		}
-
-		return combinations;
-	}
-
-	enum ValidCharacters {
-		HASH('#'),
-		DOT('.'),
-		QUESTION_MARK('?');
-
-		private final char character;
-
-		ValidCharacters(char character) {
-			this.character = character;
-		}
-
-		public char getCharacter() {
-			return character;
-		}
-
-		public static ValidCharacters fromChar(char character) {
-			for (ValidCharacters validCharacter : ValidCharacters.values()) {
-				if (validCharacter.getCharacter() == character) {
-					return validCharacter;
-				}
-			}
-
-			throw new IllegalArgumentException("Character " + character + " is not a valid character");
-		}
-
-		@Override
-		public String toString() {
-			return Character.toString(character);
-		}
-	}
-
-	public class CombinationGenerator {
-		public static List<List<Integer>> generateCombinations(int n, List<Integer> mustMatch) {
-			// WARNING: for values above 30 this takes unreasonably long to compute)
-
-			List<List<Integer>> combinations = new ArrayList<>();
-
-			final List<Integer> nextMustMatch;
-			if (mustMatch != null && mustMatch.size() > 1) {
-				nextMustMatch = mustMatch.subList(1, mustMatch.size());
-			} else {
-				nextMustMatch = new ArrayList<>(List.of(0));
-			}
-
-			if (mustMatch.size() == 0) {
-				return List.of(List.of());
-			}
-
-			IntStream.range(1, n + 1)
-					.filter(number -> mustMatch == null || number == mustMatch.get(0))
-					.forEach(number -> {
-						int nextN = n - number - 1;
-						List<List<Integer>> subCombinations = generateCombinations(nextN, nextMustMatch);
-						for (List<Integer> subCombination : subCombinations) {
-							// merge them together, so that [1] and [[],[2],[3,4]] becomes
-							// [[1],[1,2],[1,3,4]]
-							List<Integer> merged = Stream.concat(Stream.of(number),
-									subCombination.stream())
-									.toList();
-							combinations.add(merged);
-						}
-					});
-
-			combinations.add(List.of()); // add empty element
-
-			return combinations;
-		}
-	}
-
-	static class StringGenerator {
-		private final List<ValidCharacters> characters;
-		private final int numberOfHashes;
-		private final int numberOfQuestionMarks;
-
-		public StringGenerator(List<ValidCharacters> characters) {
-			this.characters = characters;
-			this.numberOfHashes = (int) characters.stream().filter(c -> c == ValidCharacters.HASH).count();
-			this.numberOfQuestionMarks = (int) characters.stream().filter(c -> c == ValidCharacters.QUESTION_MARK)
-					.count();
-		}
-
-		public String getStringFromBooleans(List<Boolean> questionMarkStates) {
-			if (questionMarkStates.size() != numberOfQuestionMarks) {
-				throw new IllegalArgumentException(
-						"The size of the boolean list must match the number of question marks");
-			}
-
-			int questionMarkIndex = 0;
-			StringBuilder stringBuilder = new StringBuilder();
-
-			for (ValidCharacters character : characters) {
-				if (character == ValidCharacters.HASH) {
-					stringBuilder.append("#");
-				} else if (character == ValidCharacters.QUESTION_MARK) {
-					stringBuilder.append(questionMarkStates.get(questionMarkIndex) ? "#" : ".");
-					questionMarkIndex++;
-				}
-			}
-
-			return stringBuilder.toString();
-		}
-
-		public List<ValidCharacters> getCharactersFromBooleans(List<Boolean> questionMarkStates) {
-			if (questionMarkStates.size() != numberOfQuestionMarks) {
-				throw new IllegalArgumentException(
-						"The size of the boolean list must match the number of question marks");
-			}
-
-			List<ValidCharacters> output = new ArrayList<>(characters.size());
-
-			Iterator<Boolean> questionMarkStateIterator = questionMarkStates.iterator();
-
-			for (ValidCharacters character : characters) {
-				if (character == ValidCharacters.HASH) {
-					output.add(ValidCharacters.HASH);
-				} else if (character == ValidCharacters.QUESTION_MARK) {
-					output.add(questionMarkStateIterator.next() ? ValidCharacters.HASH : ValidCharacters.DOT);
-				}
-			}
-
-			return output;
-		}
-
-		public boolean[] getBooleansFromBooleans(List<Boolean> questionMarkStates) {
-			if (questionMarkStates.size() != numberOfQuestionMarks) {
-				throw new IllegalArgumentException(
-						"The size of the boolean list must match the number of question marks");
-			}
-
-			boolean[] output = new boolean[characters.size()];
-
-			Iterator<Boolean> questionMarkStateIterator = questionMarkStates.iterator();
-
-			for (int i = 0; i < characters.size(); i++) {
-				ValidCharacters character = characters.get(i);
-				if (character == ValidCharacters.HASH) {
-					output[i] = true;
-				} else if (character == ValidCharacters.QUESTION_MARK) {
-					output[i] = questionMarkStateIterator.next();
-				}
-			}
-
-			return output;
-		}
-
-		public int getNumberOfHashes() {
-			return numberOfHashes;
-		}
-
-		public int getNumberOfQuestionMarks() {
-			return numberOfQuestionMarks;
-		}
-
-		static class BooleanArrayGenerator {
-
-			public static Stream<List<Boolean>> generateBooleanArrays(int length, int numberOfTrues) {
-				return generateCombinationsStream(new int[numberOfTrues], 0, 0, length);
-			}
-
-			// Helper method to generate combinations as a Stream
-			private static Stream<List<Boolean>> generateCombinationsStream(int[] combination, int start, int depth,
-					int n) {
-				if (depth == combination.length) {
-					return Stream.of(createList(n, combination.clone()));
-				}
-
-				return IntStream.range(start, n)
-						.mapToObj(i -> {
-							int[] newCombination = combination.clone();
-							newCombination[depth] = i;
-							return generateCombinationsStream(newCombination, i + 1, depth + 1, n);
-						})
-						.flatMap(s -> s);
-			}
-
-			// Converts a combination of indices to a list of Booleans
-			private static List<Boolean> createList(int n, int[] indices) {
-				List<Boolean> list = new ArrayList<>(n);
-				for (int i = 0; i < n; i++) {
-					list.add(false);
-				}
-				for (int index : indices) {
-					list.set(index, true);
-				}
-				return list;
-			}
-		}
-
-		public Stream<String> getAllCombinationsWithNumberOfHashes(int numberOfHashes) {
-			int trues = numberOfHashes - this.numberOfHashes;
-
-			if (trues < 0) {
-				return Stream.of();
-			}
-
-			if (trues > this.numberOfQuestionMarks) {
-				return Stream.of();
-			}
-
-			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
-					trues).map(this::getStringFromBooleans);
-		}
-
-		public Stream<List<ValidCharacters>> getAllCombinationsWithNumberOfHashesAsCharacters(int numberOfHashes) {
-			int trues = numberOfHashes - this.numberOfHashes;
-
-			if (trues < 0) {
-				return Stream.of();
-			}
-
-			if (trues > this.numberOfQuestionMarks) {
-				return Stream.of();
-			}
-
-			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
-					trues).map(this::getCharactersFromBooleans);
-		}
-
-		public Stream<boolean[]> getAllCombinationsWithNumberOfHashesAsBooleans(int numberOfHashes) {
-			int trues = numberOfHashes - this.numberOfHashes;
-
-			if (trues < 0) {
-				return Stream.of();
-			}
-
-			if (trues > this.numberOfQuestionMarks) {
-				return Stream.of();
-			}
-
-			return BooleanArrayGenerator.generateBooleanArrays(this.numberOfQuestionMarks,
-					trues).map(this::getBooleansFromBooleans);
-		}
+	public static long getPossibleCombinationCount(FunctionRecord record) {
+		CombinationNumberFinder finder = new CombinationNumberFinder(record.numbers());
+		return finder.getMatches(record.characters());
 	}
 }
