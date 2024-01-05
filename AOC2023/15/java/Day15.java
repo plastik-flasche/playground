@@ -32,13 +32,8 @@ class HASHMAPAlgorithm {
 	}
 
 	public static int getHashCode(String toHash) {
-		AtomicInteger result = new AtomicInteger();
-		toHash.chars().forEach(c -> {
-			result.set(result.get() + c);
-			result.set(result.get() * 17);
-			result.set(result.get() % 256);
-		});
-		return result.get();
+		return toHash.chars()
+				.reduce(0, (partial, c) -> ((partial + c) * 17) % 256);
 	}
 
 	public long getFocusingPower() {
