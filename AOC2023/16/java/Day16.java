@@ -119,21 +119,46 @@ class Beam {
 }
 
 class MirrorGrid {
-	private MirrorTile[][] tiles;
-	List<Beam> beams = new ArrayList<>();
+	Type[][] types;
 
 	public MirrorGrid(List<String> lines) {
-		tiles = new MirrorTile[lines.get(0).length()][lines.size()];
+		types = new Type[lines.get(0).length()][lines.size()];
 		for (int y = 0; y < lines.size(); y++) {
 			for (int x = 0; x < lines.get(y).length(); x++) {
-				tiles[x][y] = new MirrorTile(Type.fromChar(lines.get(y).charAt(x)));
+				types[x][y] = Type.fromChar(lines.get(y).charAt(x));
+			}
+		}
+	}
+
+	public long getTask1Answer() {
+		return calculateTraversedCount(types, new Beam(0, 0, MirrorDirection.EAST));
+	}
+
+	public long getTask2Answer() {
+		List<Beam> toCalculate = new ArrayList<>();
+		for (int x = 0; x < types.length; x++) {
+			toCalculate.add(new Beam(x, 0, MirrorDirection.SOUTH));
+			toCalculate.add(new Beam(x, types[0].length - 1, MirrorDirection.NORTH));
+		}
+		for (int y = 0; y < types[0].length; y++) {
+			toCalculate.add(new Beam(0, y, MirrorDirection.EAST));
+			toCalculate.add(new Beam(types.length - 1, y, MirrorDirection.WEST));
+		}
+
+		return toCalculate.stream().mapToLong(b -> calculateTraversedCount(types, b)).max().orElseThrow();
+	}
+
+	public long calculateTraversedCount(Type[][] types, Beam start) {
+		List<Beam> beams = new ArrayList<>();
+		beams.add(start);
+
+		MirrorTile[][] tiles = new MirrorTile[types.length][types[0].length];
+		for (int y = 0; y < types.length; y++) {
+			for (int x = 0; x < types[y].length; x++) {
+				tiles[x][y] = new MirrorTile(types[x][y]);
 			}
 		}
 
-		beams.add(new Beam(0, 0, MirrorDirection.EAST));
-	}
-
-	public long getTraversedCount() {
 		while (!beams.isEmpty()) {
 			Beam beam = beams.remove(0);
 			Set<MirrorDirection> mirrorsOutputs = tiles[beam.x][beam.y].traverse(beam.direction);
@@ -146,6 +171,7 @@ class MirrorGrid {
 				beams.add(new Beam(beam.x + d.getX(), beam.y + d.getY(), d));
 			}
 		}
+
 		return Arrays.stream(tiles).flatMap(Arrays::stream).filter(MirrorTile::isTraversed).count();
 	}
 }
@@ -163,11 +189,11 @@ public class Day16 {
 		}
 
 		MirrorGrid grid = new MirrorGrid(lines);
-		long startNano = System.nanoTime();
-		long task1 = grid.getTraversedCount();
+
+		long task1 = grid.getTask1Answer();
 		System.out.println("Task 1: " + task1);
-		long endNano = System.nanoTime();
-		System.out.println("Task 1 took " + (endNano - startNano) + " nanoseconds = "
-				+ ((endNano - startNano) / 1000000) + " milliseconds");
+
+		long task2 = grid.getTask2Answer();
+		System.out.println("Task 2: " + task2);
 	}
 }
