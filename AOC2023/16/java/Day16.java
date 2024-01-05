@@ -130,7 +130,6 @@ class MirrorGrid {
 			}
 		}
 
-		beams = new ArrayList<>();
 		beams.add(new Beam(0, 0, MirrorDirection.EAST));
 	}
 
@@ -164,7 +163,11 @@ public class Day16 {
 		}
 
 		MirrorGrid grid = new MirrorGrid(lines);
+		long startNano = System.nanoTime();
 		long task1 = grid.getTraversedCount();
 		System.out.println("Task 1: " + task1);
+		long endNano = System.nanoTime();
+		System.out.println("Task 1 took " + (endNano - startNano) + " nanoseconds = "
+				+ ((endNano - startNano) / 1000000) + " milliseconds");
 	}
 }
